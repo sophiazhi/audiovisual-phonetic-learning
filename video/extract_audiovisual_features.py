@@ -1,26 +1,6 @@
 """
 using pretrained visual features PCA model,
 extract audio-visual features from .mp4 videos
-
-take input list (json) of videos
-
-initialize empty list for all video data
-initialize MFCC transform
-initialize visual transform
-read all videos:
-    {crop video to mouth region
-    greyscale
-    reshape to 1D tensor
-    apply PCA model}
-    --> video features
-    
-    MFCC transform 
-    --> audio features
-    
-    concatenate features and append to list
-convert list to tensor
-
-save tensor as ___?
 """
 
 import argparse
@@ -36,14 +16,14 @@ import os
 from video_library import video_transform_5500_230212 as video_transform
 import numpy as np
 from pathlib import Path
-# from torchvision.transforms import Grayscale
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Parse arguments for audiovisual feature extraction')
     
-    parser.add_argument('train_json', help='Path to json list of training videos') # input file name
-    parser.add_argument('model_name', help='Path to video model pkl file') # model file name
+    parser.add_argument('train_json', help='Path to json list of training videos')
+    parser.add_argument('model_name', help='Path to video model pkl file')
+    parser.add_argument('output_file', help='Path to output .mat or .npy file to write features to')
     parser.add_argument('--video_corpus', default='../corpora/childes_synthetic_video_60fps/')
     parser.add_argument('--audio_corpus', default='../corpora/childes_synthetic_audio/')
     parser.add_argument('--split', default='train') # can also be 'test' or 'eval'
@@ -127,23 +107,23 @@ def process_videos(train_list, pca_model, video_corpus, audio_corpus):
     return data_ndarray
 
 
-def np2out(data, split='train'):
+def np2out(data, output_file, split='train'):
     if split == 'train':
-        np2mat(data)
+        np2mat(data, output_file)
     elif split == 'eval' or split == 'test':
-        np2npy(data)
+        np2npy(data, output_file)
 
-def np2mat(data):
+def np2mat(data, output_file):
     data = data.astype('float64')
     train_list = {}
     for i in tqdm(range(data.shape[0])):
         row = data[i,:]
         label = f"file{int(row[-2])}_window{int(row[-1])}"
         train_list[label] = row[:-2]
-    savemat("train.mat", train_list)
+    savemat(output_file, train_list)
 
-def np2npy(data):
-    np.save("split5500_videofeats_eval.npy", data)
+def np2npy(data, output_file):
+    np.save(output_file, data)
 
 
 if __name__ == '__main__':
@@ -152,4 +132,4 @@ if __name__ == '__main__':
     train_list = read_train_list(args.train_json)
     pca_model = load(args.model_name)
     train_data = process_videos(train_list, pca_model, args.video_corpus, args.audio_corpus)
-    np2out(train_data, args.split)
+    np2out(train_data, args.output_file, args.split)
