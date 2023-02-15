@@ -25,7 +25,7 @@ def parse_args():
     #                                         'distances, scores and results'
     #                                         'subfolders)'))
     
-    parser.add_argument('--alignment_corpus', default='../corpora/childes_synthetic_audio_alignment', help='Path to corpus of audio-text alignment .csvs')
+    parser.add_argument('--alignment_corpus', default='/om2/user/szhi/corpora/childes_synthetic_audio_alignment', help='Path to corpus of audio-text alignment .csvs')
     parser.add_argument('--distance', default='kl', help='kl or cos or dur or euc')
     parser.add_argument('--normalized', default=True, help='if true, take mean distance along dtw path length instead of sum')
     parser.add_argument('--n_cpu', default=1)

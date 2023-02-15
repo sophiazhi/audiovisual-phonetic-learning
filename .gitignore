@@ -1,4 +1,10 @@
 **.mat
 **.npy
 **.pkl
+**.features
 **__pycache__
+**.abx
+**.distance
+**.scores
+**.item
+**.txt

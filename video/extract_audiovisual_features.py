@@ -143,7 +143,7 @@ def np2mat(data):
     savemat("train.mat", train_list)
 
 def np2npy(data):
-    np.save("eval_310123.npy", data)
+    np.save("split5500_videofeats_eval.npy", data)
 
 
 if __name__ == '__main__':
