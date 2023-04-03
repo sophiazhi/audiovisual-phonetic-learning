@@ -1,6 +1,8 @@
 import h5features as h5f
 import argparse
 import numpy as np
+# from joblib import load
+import pickle
 
 '''
 use venv `h5features`
@@ -10,10 +12,18 @@ def convert(mat_file, output_file):
     with h5f.Converter(output_file, groupname='features') as converter:
         converter.convert(mat_file)
 
+def pkl2h5(pkl_file, output_file):
+    # utt_ids, times, features = load(pkl_file)
+    # h5f.write(output_file, 'features', utt_ids, times, features)
+    with open(pkl_file, 'rb') as f:
+        utt_ids, times, features = pickle.load(f)
+    h5f.write(output_file, 'features', utt_ids, times, features)
+
+
 def np2h5(npy_file, output_file):
     '''https://github.com/sophiazhi/perceptual-tuning-pnas/blob/main/tools/kaldi_feats/kaldif2h5f.py'''
     data = np.load(npy_file)
-    print(np.unique(data[:,-2]))
+    # print(np.unique(data[:,-2]))
     features = []
     utt_ids = []
     times = []
@@ -59,4 +69,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     # convert(args.mat_file, args.output_file)
-    np2h5(args.mat_file, args.output_file)
+    # np2h5(args.mat_file, args.output_file)
+    pkl2h5(args.mat_file, args.output_file)

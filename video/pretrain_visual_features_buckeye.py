@@ -17,6 +17,8 @@ optionally, do some eval
 import numpy as np
 import argparse
 from sklearn.decomposition import PCA
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 from joblib import dump # , load
 import json
 from torchvision.io import read_video
@@ -45,6 +47,9 @@ def read_train_list(train_json):
 def process_videos(train_list, video_transform, video_corpus):
     video_data = []
     for video_name in tqdm(train_list):
+        if not os.path.exists(os.path.splitext(os.path.join(video_corpus, video_name))[0] + ".mp4"):
+            print(f"Missing {os.path.splitext(video_name)[0]}")
+            continue
         video_info = read_video(os.path.splitext(os.path.join(video_corpus, video_name))[0] + ".mp4", pts_unit='sec')
         video_tensor = video_info[0] # BHWC, torch.Size([742, 1080, 1920, 3])
         video_tensor = video_transform(video_tensor)
@@ -55,7 +60,11 @@ def process_videos(train_list, video_transform, video_corpus):
     return all_video_ndarray
 
 def train(train_data, model_name, n_components):
-    pca = PCA(n_components=n_components)
+    pca = Pipeline(steps=[    
+        ('scaling',StandardScaler()),
+        ('pca',PCA(n_components=n_components))
+        ])
+    # pca = PCA(n_components=n_components)
     pca.fit(train_data)
     dump(pca, model_name)
 

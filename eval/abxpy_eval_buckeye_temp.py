@@ -49,12 +49,19 @@ def _remove_stress(phoneme):
 
 def process_files(file_list, alignment_corpus, av_offset):
     cumulative_df = []
+
+    missing_files = set(pd.read_csv('/om2/user/szhi/perceptual-tuning-pnas/missing.txt', header=None)[0])
     
     for filename in file_list:
+        if filename[:-4] in missing_files:
+            print("found missing file {}".format(filename))
+            continue
         alignment_file = os.path.join(alignment_corpus, os.path.splitext(filename)[0] + ".csv")
         df = pd.read_csv(alignment_file, index_col=False)
         df = df[df['Type'] == 'phones'] # some entries in the csv are word alignments
-        df['#file'] = Path(filename).stem
+        video_name_stem = Path(filename).stem
+        # video_name_stem = video_name_stem[3:5] + ('1' if video_name_stem[5] == 'a' else '2') + video_name_stem[7:]
+        df['#file'] = video_name_stem
         
         df = df.reset_index(drop=True)
         df['prev-phone'] = pd.concat([pd.Series(['<s>']), df['Label']], ignore_index=True).drop(index=len(df)).reset_index(drop=True)
@@ -68,6 +75,20 @@ def process_files(file_list, alignment_corpus, av_offset):
         # first audio idx at ceil((offset-12.5)/10) --> first audio window centered at 10*ceil((offset-12.5)/10) + 25/2
         df = df.drop(df[df['End']*1000 <= 10*math.ceil((av_offset-12.5)/10) + 25/2].index) # end of phone must be greater than center of the first audio window
         # df = df.drop(df[(df['Begin'] + df['End'])/2 < 14*0.010+0.025/2].index) # worked for offset=150 but probably not the most comprehensive
+        # start of phone must be less than center of last audio window
+        last_aidx = (df['End'].max() - 0.025)//0.01
+        # if video_name_stem == 's0101a_018':
+        #     print(video_name_stem)
+        #     print(last_aidx)
+        #     print(df['End'].max())
+        #     print(df)
+        df = df.drop(df[df['Begin'] >= 0.010*last_aidx + 0.0125].index) 
+        # if video_name_stem == 's0101a_018':
+        #     print(df)
+
+        if video_name_stem == 's2602a_046':
+            # TODO: remove phones that don't contain the center of an audio window within its range
+            continue
 
         cumulative_df.append(df)
     
