@@ -1,4 +1,4 @@
-function my_run_dpgmm_subclusters(data_file, model_dir, Mproc, sc)
+function my_run_dpgmm_subclusters(data_file, model_dir, Mproc, sc, alpha)
 % Modified by Thomas Schatz from:
 % RUN_DPGMM_SUBCLUSTERS - runs the Dirichlet process Gaussian mixture model
 % with subcluster splits and merges
@@ -38,7 +38,7 @@ start=10;
 if (~exist('sc','var') || isempty(sc))
     sc = true;
 end
-alpha=1;
+alpha=alpha;
 as = false;
 endtime = 10000000000;
 numits = 1500;

@@ -4,7 +4,7 @@
 #SBATCH --mem 80G
 #SBATCH -N 1
 
-id="be1375fy_oracle_scalar_brokenstops20"
+id="be1375fy_oracle_brokenstops30_fix"
 corpora_audio="/om2/user/szhi/corpora/buckeye_segments"
 corpora_audio_alignment="/om2/user/szhi/corpora/buckeye_segments"
 corpora_video="/om2/user/szhi/corpora/buckeye_synthetic_video"
@@ -27,8 +27,8 @@ conda activate synthetic_Dataset
 # pretrain script
 # singularity exec --nv --bind /om2/user/szhi/ /om2/user/szhi/vagrant/wav2lip-local.simg python video/pretrain_visual_features.py $data_pretrain $id/$id.pkl --video_fn $video_fn --n_components $video_n_components --video_corpus $corpora_video
 # extract audiovisual features for train and eval
-python video/extract_oracle_features_buckeye_temp.py $data_train be1375fy_baseline/be1375fy_baseline.pkl $id/${id}_train.mat --video_fn $video_fn --frame_fn $frame_fn --audio_corpus $corpora_audio --video_corpus $corpora_video
-python video/extract_oracle_features_buckeye_temp.py $data_test be1375fy_baseline/be1375fy_baseline.pkl $id/${id}_eval.npy --video_fn $video_fn --frame_fn $frame_fn --audio_corpus $corpora_audio --video_corpus $corpora_video --split eval --mode av
+python video/extract_oracle_features_buckeye.py $data_train be1375fy_baseline/be1375fy_baseline.pkl $id/${id}_train.mat --video_fn $video_fn --frame_fn $frame_fn --audio_corpus $corpora_audio --video_corpus $corpora_video
+python video/extract_oracle_features_buckeye.py $data_test be1375fy_baseline/be1375fy_baseline.pkl $id/${id}_eval.npy --video_fn $video_fn --frame_fn $frame_fn --audio_corpus $corpora_audio --video_corpus $corpora_video --split eval --mode av
 
 conda deactivate
 

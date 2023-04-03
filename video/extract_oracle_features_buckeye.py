@@ -119,7 +119,7 @@ def frame_transform_offset_frontpad(a_idx, video_features, audio_features, video
     # append audio slice + video slice to data
     frame_data = torch.cat(
         [audio_features[int(a_idx+frontpad/10)], 
-            torch.zeros((60,)),
+            torch.zeros((42,)),
             torch.Tensor([int(video_name_stem)]), 
             torch.Tensor([a_idx])], 
             dim=-1,
@@ -215,7 +215,7 @@ def process_videos(
             if frame_data is None: # video frame is out of range
                 continue
 
-            oracle_video_full = torch.empty((60,))
+            oracle_video_full = torch.empty((42,))
             oracle_video = phone2feat(phone, post_onset_time)
             oracle_video_full[:len(oracle_video)] = oracle_video
             frame_data[audio_features.shape[1]:-2] = oracle_video_full

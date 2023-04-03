@@ -105,7 +105,7 @@ def _confusion_matrix(results_df, phone2label, png_name, figsize=(8,6), save_cou
         A, B = group[0]
         aidx, bidx = A_labels.index(A), B_labels.index(B)
         scores[aidx,bidx] = group[1]['score'].mean()
-        counts[aidx][bidx] = f"{group[1]['score'].count()}\n({len(group[1]['by'].unique())})"
+        counts[aidx][bidx] = f"{group[1]['n'].sum()}\n({len(group[1]['by'].unique())})"
 
 
     fig, ax = plt.subplots(figsize=figsize)
