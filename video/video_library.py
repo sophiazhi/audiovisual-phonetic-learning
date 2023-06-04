@@ -3,6 +3,14 @@ from torchvision.transforms import Grayscale
 from torchvision.utils import save_image
 
 
+### vname2id functions, for converting a video name to unique ID
+
+def vname2id_buckeye(video_name_stem):
+    return video_name_stem[3:5] + ('1' if video_name_stem[5] == 'a' else '2') + video_name_stem[7:]
+
+def vname2id_childes(video_name_stem):
+    return video_name_stem
+
 ### video_transform functions, for converting raw video to PCA input ### 
 
 def video_transform_5500(video_tensor):
@@ -237,3 +245,28 @@ def frame_transform_offset_frontpad_dd(a_idx, video_features, audio_features, vi
     return frame_data
 
 frame_transform_offset_frontpad_dd_120 = lambda a_idx, video_features, audio_features, video_name_stem, video_fps: frame_transform_offset_frontpad_dd(a_idx, video_features, audio_features, video_name_stem, video_fps, 120)
+
+
+### miscellaneous
+
+def add_noise(waveform, noise, snr):
+    if not (waveform.ndim - 1 == noise.ndim - 1 == snr.ndim):
+        raise ValueError("Input leading dimensions don't match.")
+
+    L = waveform.size(-1)
+
+    if L != noise.size(-1):
+        raise ValueError(f"Length dimensions of waveform and noise don't match (got {L} and {noise.size(-1)}).")
+
+    masked_waveform = waveform
+    masked_noise = noise
+
+    energy_signal = torch.linalg.vector_norm(masked_waveform, ord=2, dim=-1) ** 2  # (*,)
+    energy_noise = torch.linalg.vector_norm(masked_noise, ord=2, dim=-1) ** 2  # (*,)
+    original_snr_db = 10 * (torch.log10(energy_signal) - torch.log10(energy_noise))
+    scale = 10 ** ((original_snr_db - snr) / 20.0)  # (*,)
+
+    # scale noise
+    scaled_noise = scale.unsqueeze(-1) * noise  # (*, 1) * (*, L) = (*, L)
+
+    return waveform + scaled_noise  # (*, L)

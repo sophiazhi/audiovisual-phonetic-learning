@@ -218,8 +218,9 @@ def process_videos(
         # match video frames to audio frames
         for a_idx in range(num_audio_feature_frames):
             phone, post_onset_time = aidx2phone(a_idx, alignment_df)
-            video_name_stem = Path(video_name).stem
-            video_name_stem = video_name_stem[3:5] + ('1' if video_name_stem[5] == 'a' else '2') + video_name_stem[7:]
+            # video_name_stem = Path(video_name).stem
+            # video_name_stem = video_name_stem[3:5] + ('1' if video_name_stem[5] == 'a' else '2') + video_name_stem[7:]
+            video_name_stem = video_library.vname2id_buckeye(Path(video_name).stem)
             frame_data = frame_transform(a_idx, video_features, audio_features, video_name_stem, video_fps)
 
             # frame_data = phone2feat(aidx2phone(a_idx, alignment_df))

@@ -30,8 +30,7 @@ def parse_args():
     parser.add_argument('--video_corpus', default='/om2/user/szhi/corpora/buckeye_synthetic_video/')
     parser.add_argument('--audio_corpus', default='/om2/user/szhi/corpora/buckeye_segments/')
     parser.add_argument('--split', default='train') # can also be 'test' or 'eval'
-    parser.add_argument('--mode', default='av', help='Modality/ies of features to extract. Can be "a" (audio only), "v", "an" (audio with noise for visual), "vn", or "av".')
-    parser.add_argument('--means_npy', default=None, help='Path to .npy file of pretrain feature means')
+    parser.add_argument('--mode', default='av', help='Modality/ies of features to extract. Can be "a" (audio only), "v", "n" (noisy audio), "av", or "nv".')
 
     args = parser.parse_args()
     return args
@@ -40,7 +39,6 @@ def parse_args():
 def read_train_list(train_json):
     with open(train_json, 'r') as f:
         train_list = json.load(f)
-    print(len(train_list))
     return train_list
 
 
@@ -54,7 +52,6 @@ def process_videos(
     split, 
     output_file,
     mode='av',
-    means_npy=None,
     ):
     if split == 'train':
         train = True
@@ -65,48 +62,18 @@ def process_videos(
 
     # https://pytorch.org/audio/stable/generated/torchaudio.transforms.MFCC.html#torchaudio.transforms.MFCC
     # https://pytorch.org/audio/stable/generated/torchaudio.transforms.MelSpectrogram.html#torchaudio.transforms.MelSpectrogram
-    # mfcc_transform = torchaudio.transforms.MFCC(
-    #     log_mels = True,
-    #     sample_rate=audio_sample_rate, 
-    #     n_mfcc=13,
-    #     melkwargs={
-    #         # "sample_rate": audio_sample_rate,
-    #         "n_fft": int(audio_sample_rate * 25/1000.),
-    #         "n_mels": 64,
-    #         # "win_length": 25,
-    #         "hop_length": int(audio_sample_rate * 10/1000.),
-    #     },
-    # )
-    # mfcc_transform = torchaudio.transforms.MFCC( # "be1375fy_vdim4_mfccdd39_042823"
-    #     log_mels = True,
-    #     sample_rate=audio_sample_rate, 
-    #     n_mfcc=13,
-    #     melkwargs={
-    #         # "sample_rate": audio_sample_rate,
-    #         "n_fft": int(audio_sample_rate * 25/1000.),
-    #         "n_mels": 64,
-    #         # "win_length": 25,
-    #         "hop_length": int(audio_sample_rate * 10/1000.),
-    #         "center": False,
-    #     },
-    # )
     mfcc_transform = torchaudio.transforms.MFCC( # "be1375fy_043023"
         log_mels = True,
         sample_rate=audio_sample_rate, 
         n_mfcc=13,
         melkwargs={
-            # "sample_rate": audio_sample_rate,
             "n_fft": int(audio_sample_rate * 25/1000.),
             "n_mels": 23,
-            # "win_length": 25,
             "hop_length": int(audio_sample_rate * 10/1000.),
             "center": False,
         },
     )
     delta_transform = torchaudio.transforms.ComputeDeltas(win_length=7)
-
-    if mode == 'am' or mode == 'vm':
-        feature_means = torch.Tensor(np.load(means_npy))
 
     if train:
         train_feats = {}
@@ -115,7 +82,6 @@ def process_videos(
         utt_ids = []
         times = []
     
-    print(len(train_list))
     for video_name_idx, video_name in enumerate(tqdm(train_list)):
         if not os.path.exists(os.path.splitext(os.path.join(video_corpus, video_name))[0] + ".mp4"):
             print(f"Missing file {os.path.splitext(video_name)[0]}")
@@ -130,19 +96,20 @@ def process_videos(
         video_fps = video_info[2]['video_fps']
         
         audio_tensor = video_info[1] # torch.Size([1, frames])
-        mfcc_features = mfcc_transform(audio_tensor) # torch.Size([1, 26, 17613])
+        if mode in set('n', 'nv'):
+            noise = torch.randn(audio_tensor.shape) # torch.Size([1, frames])
+            snr = torch.Tensor([5])
+            audio_tensor = video_library.add_noise(audio_tensor, noise, snr) # torch.Size([1, frames])
+        mfcc_features = mfcc_transform(audio_tensor) # torch.Size([1, 13, 17613])
         d_mfcc_features = delta_transform(mfcc_features)
         dd_mfcc_features = delta_transform(d_mfcc_features)
         audio_features = torch.cat((mfcc_features, d_mfcc_features, dd_mfcc_features), dim=1)
         audio_features = torch.transpose(torch.squeeze(audio_features, dim=0), 0, 1)
-        # audio_features = mfcc_transform(audio_tensor)
-        # audio_features = torch.transpose(torch.squeeze(audio_features, dim=0), 0, 1)
-        # print(audio_features.shape) # torch.Size([17613, 26])
+        # print(audio_features.shape) # torch.Size([17613, 39])
         
         # check length of original unpadded audio so we don't include the silence at the end
         original_audio, sr = torchaudio.load(os.path.splitext(os.path.join(audio_corpus, video_name))[0] + ".wav")
         num_audio_feature_frames = (original_audio.shape[1] - int(sr * 25/1000.))//int(sr * 10/1000.) + 1
-        # print(num_audio_feature_frames)
 
         if len(video_features) < (num_audio_feature_frames*10+25 + 500) // (1000/video_fps):
             print(f"{os.path.splitext(video_name)[0]} missing video frames")
@@ -154,32 +121,22 @@ def process_videos(
             data = []
         # match video frames to audio frames
         for a_idx in range(num_audio_feature_frames):
-            ## NEW FOR BUCKEYE
-            video_name_stem = Path(video_name).stem
-            video_name_stem = video_name_stem[3:5] + ('1' if video_name_stem[5] == 'a' else '2') + video_name_stem[7:]
-            ## 
+            # ## NEW FOR BUCKEYE
+            # video_name_stem = Path(video_name).stem
+            # video_name_stem = video_name_stem[3:5] + ('1' if video_name_stem[5] == 'a' else '2') + video_name_stem[7:]
+            # ## 
+            video_name_stem = video_library.vname2id_buckeye(Path(video_name).stem)
             frame_data = frame_transform(a_idx, video_features, audio_features, video_name_stem, video_fps)
             if frame_data is None: # video frame is out of range
                 continue
 
-            if mode == 'a':
+            if mode == 'a' or mode == 'n':
                 frame_data[audio_features.shape[1]] = frame_data[-2]
                 frame_data[audio_features.shape[1]+1] = frame_data[-1]
                 frame_data = frame_data[:audio_features.shape[1]+2]
             elif mode == 'v':
                 frame_data = frame_data[audio_features.shape[1]:]
-            elif mode == 'an':
-                # frame_data = frame_data with visual features masked out
-                frame_data[audio_features.shape[1]:-2] = 0 
-            elif mode == 'vn':
-                # frame_data = frame_data with audio features masked out
-                frame_data[:audio_features.shape[1]] = 0 
-            elif mode == 'am':
-                vdim = len(feature_means[audio_features.shape[1]:])
-                frame_data[audio_features.shape[1]:-2] = torch.cat((torch.zeros((vdim,)), feature_means[audio_features.shape[1]:], torch.zeros((vdim,))))
-            elif mode == 'vm':
-                frame_data[:audio_features.shape[1]] = feature_means[:audio_features.shape[1]]
-            # if mode == 'av' change nothing
+            # if mode == 'av' or 'nv' change nothing
 
             if train:
                 frame_data = frame_data.detach().cpu().numpy().astype('float64')
@@ -190,7 +147,7 @@ def process_videos(
         
         if not train:
             data_tensor = torch.cat(data, dim=0)
-            data_ndarray = data_tensor.detach().cpu().numpy().astype('float64') ## FLOAT64 IS NEW
+            data_ndarray = data_tensor.detach().cpu().numpy().astype('float64')
             features.append(data_ndarray[:, :-2])
             utt_ids.append(Path(video_name).stem)
             times.append(data_ndarray[:, -1] * 0.010 + 0.0125)
@@ -207,39 +164,13 @@ def process_videos(
             pickle.dump((utt_ids, times, features), f, protocol=2)
 
 
-def np2out(data, output_file, split='train'):
-    if split == 'train':
-        np2mat(data, output_file)
-    elif split == 'eval' or split == 'test':
-        np2npy(data, output_file)
-
-def np2mat(data, output_file):
-    data = data.astype('float64')
-    train_list = {}
-    for i in tqdm(range(data.shape[0])):
-        row = data[i,:]
-        label = f"file{int(row[-2])}_window{int(row[-1])}"
-        train_list[label] = row[:-2]
-    savemat(output_file, train_list)
-
-def np2npy(data, output_file):
-    np.save(output_file, data)
-
-
 if __name__ == '__main__':
     args = parse_args()
     
     train_list = read_train_list(args.train_json)
-    # print(len(train_list))
+    
     pca_model = load(args.model_name)
     video_transform = getattr(video_library, args.video_fn)
     frame_transform = getattr(video_library, args.frame_fn)
-    # print(video_transform)
-    # print(len(train_list))
+    
     process_videos(train_list, pca_model, video_transform, frame_transform, args.video_corpus, args.audio_corpus, args.split, args.output_file, args.mode, args.means_npy)
-    # if args.split == 'train':
-    #     process_train_videos(train_list, pca_model, args.video_corpus, args.audio_corpus, args.output_file)
-    # elif args.split == 'eval' or args.split == 'test':
-    #     process_eval_videos(train_list, pca_model, args.video_corpus, args.audio_corpus, args.output_file)
-    # train_data = process_videos(train_list, pca_model, args.video_corpus, args.audio_corpus)
-    # np2out(train_data, args.output_file, args.split)
