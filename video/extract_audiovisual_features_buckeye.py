@@ -31,6 +31,7 @@ def parse_args():
     parser.add_argument('--audio_corpus', default='/om2/user/szhi/corpora/buckeye_segments/')
     parser.add_argument('--split', default='train') # can also be 'test' or 'eval'
     parser.add_argument('--mode', default='av', help='Modality/ies of features to extract. Can be "a" (audio only), "v", "an" (audio with noise for visual), "vn", or "av".')
+    parser.add_argument('--means_npy', default=None, help='Path to .npy file of pretrain feature means')
 
     args = parser.parse_args()
     return args
@@ -53,6 +54,7 @@ def process_videos(
     split, 
     output_file,
     mode='av',
+    means_npy=None,
     ):
     if split == 'train':
         train = True
@@ -63,18 +65,48 @@ def process_videos(
 
     # https://pytorch.org/audio/stable/generated/torchaudio.transforms.MFCC.html#torchaudio.transforms.MFCC
     # https://pytorch.org/audio/stable/generated/torchaudio.transforms.MelSpectrogram.html#torchaudio.transforms.MelSpectrogram
-    mfcc_transform = torchaudio.transforms.MFCC(
+    # mfcc_transform = torchaudio.transforms.MFCC(
+    #     log_mels = True,
+    #     sample_rate=audio_sample_rate, 
+    #     n_mfcc=13,
+    #     melkwargs={
+    #         # "sample_rate": audio_sample_rate,
+    #         "n_fft": int(audio_sample_rate * 25/1000.),
+    #         "n_mels": 64,
+    #         # "win_length": 25,
+    #         "hop_length": int(audio_sample_rate * 10/1000.),
+    #     },
+    # )
+    # mfcc_transform = torchaudio.transforms.MFCC( # "be1375fy_vdim4_mfccdd39_042823"
+    #     log_mels = True,
+    #     sample_rate=audio_sample_rate, 
+    #     n_mfcc=13,
+    #     melkwargs={
+    #         # "sample_rate": audio_sample_rate,
+    #         "n_fft": int(audio_sample_rate * 25/1000.),
+    #         "n_mels": 64,
+    #         # "win_length": 25,
+    #         "hop_length": int(audio_sample_rate * 10/1000.),
+    #         "center": False,
+    #     },
+    # )
+    mfcc_transform = torchaudio.transforms.MFCC( # "be1375fy_043023"
         log_mels = True,
         sample_rate=audio_sample_rate, 
-        n_mfcc=26,
+        n_mfcc=13,
         melkwargs={
             # "sample_rate": audio_sample_rate,
             "n_fft": int(audio_sample_rate * 25/1000.),
-            "n_mels": 64,
+            "n_mels": 23,
             # "win_length": 25,
             "hop_length": int(audio_sample_rate * 10/1000.),
+            "center": False,
         },
     )
+    delta_transform = torchaudio.transforms.ComputeDeltas(win_length=7)
+
+    if mode == 'am' or mode == 'vm':
+        feature_means = torch.Tensor(np.load(means_npy))
 
     if train:
         train_feats = {}
@@ -98,8 +130,13 @@ def process_videos(
         video_fps = video_info[2]['video_fps']
         
         audio_tensor = video_info[1] # torch.Size([1, frames])
-        audio_features = mfcc_transform(audio_tensor) # torch.Size([1, 26, 17613])
+        mfcc_features = mfcc_transform(audio_tensor) # torch.Size([1, 26, 17613])
+        d_mfcc_features = delta_transform(mfcc_features)
+        dd_mfcc_features = delta_transform(d_mfcc_features)
+        audio_features = torch.cat((mfcc_features, d_mfcc_features, dd_mfcc_features), dim=1)
         audio_features = torch.transpose(torch.squeeze(audio_features, dim=0), 0, 1)
+        # audio_features = mfcc_transform(audio_tensor)
+        # audio_features = torch.transpose(torch.squeeze(audio_features, dim=0), 0, 1)
         # print(audio_features.shape) # torch.Size([17613, 26])
         
         # check length of original unpadded audio so we don't include the silence at the end
@@ -126,9 +163,6 @@ def process_videos(
                 continue
 
             if mode == 'a':
-                # new_frame_data = torch.cat([frame_data[:audio_features.shape[1]],frame_data[-2:]],dim=0)
-                # del frame_data
-                # frame_data = new_frame_data
                 frame_data[audio_features.shape[1]] = frame_data[-2]
                 frame_data[audio_features.shape[1]+1] = frame_data[-1]
                 frame_data = frame_data[:audio_features.shape[1]+2]
@@ -136,10 +170,15 @@ def process_videos(
                 frame_data = frame_data[audio_features.shape[1]:]
             elif mode == 'an':
                 # frame_data = frame_data with visual features masked out
-                frame_data[audio_features.shape[1]:-2] = 0 # TODO: what is the best mask value
+                frame_data[audio_features.shape[1]:-2] = 0 
             elif mode == 'vn':
                 # frame_data = frame_data with audio features masked out
-                frame_data[:audio_features.shape[1]] = 0 # TODO: what is the best mask value
+                frame_data[:audio_features.shape[1]] = 0 
+            elif mode == 'am':
+                vdim = len(feature_means[audio_features.shape[1]:])
+                frame_data[audio_features.shape[1]:-2] = torch.cat((torch.zeros((vdim,)), feature_means[audio_features.shape[1]:], torch.zeros((vdim,))))
+            elif mode == 'vm':
+                frame_data[:audio_features.shape[1]] = feature_means[:audio_features.shape[1]]
             # if mode == 'av' change nothing
 
             if train:
@@ -197,7 +236,7 @@ if __name__ == '__main__':
     frame_transform = getattr(video_library, args.frame_fn)
     # print(video_transform)
     # print(len(train_list))
-    process_videos(train_list, pca_model, video_transform, frame_transform, args.video_corpus, args.audio_corpus, args.split, args.output_file, args.mode)
+    process_videos(train_list, pca_model, video_transform, frame_transform, args.video_corpus, args.audio_corpus, args.split, args.output_file, args.mode, args.means_npy)
     # if args.split == 'train':
     #     process_train_videos(train_list, pca_model, args.video_corpus, args.audio_corpus, args.output_file)
     # elif args.split == 'eval' or args.split == 'test':

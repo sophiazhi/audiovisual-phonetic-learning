@@ -32,6 +32,7 @@ def parse_args():
     parser.add_argument('--distance', default='kl', help='kl or cos or dur or euc')
     parser.add_argument('--normalized', default=True, help='if true, take mean distance along dtw path length instead of sum')
     parser.add_argument('--n_cpu', default=1)
+    parser.add_argument('--no_task', action='store_true', help="don't make new ABX task")
     
     args = parser.parse_args()
     return args
@@ -50,13 +51,8 @@ def _remove_stress(phoneme):
 
 def process_files(file_list, alignment_corpus, av_offset):
     cumulative_df = []
-
-    missing_files = set(pd.read_csv('/om2/user/szhi/perceptual-tuning-pnas/missing.txt', header=None)[0])
     
     for filename in file_list:
-        if filename[:-4] in missing_files:
-            print("found missing file {}".format(filename))
-            continue
         alignment_file = os.path.join(alignment_corpus, os.path.splitext(filename)[0] + ".csv")
         df = pd.read_csv(alignment_file, index_col=False)
         df = df[df['Type'] == 'phones'] # some entries in the csv are word alignments
@@ -79,6 +75,7 @@ def process_files(file_list, alignment_corpus, av_offset):
         # start of phone must be less than center of last audio window
         last_aidx = (df['End'].max() - 0.025)//0.01
         df = df.drop(df[df['Begin'] >= 0.010*last_aidx + 0.0125].index) 
+        df = df.drop(df[1000*df['End'] < 10*np.ceil((1000*df['Begin'] - 2.5)/10) + 2.5].index)
 
         # # for only evaluating first window of each phoneme
         # df = df.drop(df[1000*df['End'] < 10*np.ceil((1000*df['Begin'] - 2.5)/10) + 2.5].index) ## test this on be1718fy to see if it fixes empty reps
@@ -96,15 +93,12 @@ def process_files(file_list, alignment_corpus, av_offset):
         # df['Begin'] = (10*np.floor((1000*df['End'] - 2.5)/10) + 2.49)/1000
         # df = df.drop(df[df['Begin'] >= 0.010*last_aidx + 0.0125].index)
 
-        # evaluate last full window of each phoneme
-        df = df.drop(df[1000*df['Begin'] > 10*np.floor((1000*df['End'] - 12.5)/10) + 2.5].index)
-        df['Begin'] = (10*np.floor((1000*df['End'] - 12.5)/10) + 2.49)/1000
-        df['End'] = (10*np.floor((1000*df['End'] - 12.5)/10) + 12.49)/1000
-        df = df.drop(df[df['Begin'] >= 0.010*last_aidx + 0.0125].index)
-        df = df.drop(df[df['End'] <= 0.0125].index)
-
-
-        
+        # # evaluate last full window of each phoneme
+        # df = df.drop(df[1000*df['Begin'] > 10*np.floor((1000*df['End'] - 12.5)/10) + 2.5].index)
+        # df['Begin'] = (10*np.floor((1000*df['End'] - 12.5)/10) + 2.49)/1000
+        # df['End'] = (10*np.floor((1000*df['End'] - 12.5)/10) + 12.49)/1000
+        # df = df.drop(df[df['Begin'] >= 0.010*last_aidx + 0.0125].index)
+        # df = df.drop(df[df['End'] <= 0.0125].index)
 
         cumulative_df.append(df)
     
@@ -120,16 +114,16 @@ def process_files(file_list, alignment_corpus, av_offset):
     return cumulative_df
 
 
-def df2task(cumulative_df, task_file):
+def df2task(cumulative_df, task_file, item_file):
     # convert df into .item file
-    cumulative_df.to_csv('data.item', sep='\t')
+    cumulative_df.to_csv(item_file, sep='\t')
 
     ### use .item file to generate Task object/file
-    t = ABXpy.task.Task('data.item',
+    t = ABXpy.task.Task(item_file,
                             on=b'phone',
                             across=[],
-                            by=['prev-phone', 'next-phone'], # ['speaker', 'prev-phone', 'next-phone'],
-                            verbose=1)
+                            by=['prev-phone', 'next-phone'],
+                            verbose=0)
     t.generate_triplets(output=task_file)
 
 
@@ -163,10 +157,12 @@ if __name__ == "__main__":
     dis_file = os.path.join(args.res_id, args.res_id + ".distance")
     score_file = os.path.join(args.res_id, args.res_id + ".scores")
     result_file = os.path.join(args.res_id, args.res_id + ".txt")
+    item_file = os.path.join(args.res_id, args.res_id + "_data.item")
     
-    file_list = get_file_list(args.eval_json)
-    df = process_files(file_list, args.alignment_corpus, args.av_offset)
-    df2task(df, task_file)
+    if not args.no_task:
+        file_list = get_file_list(args.eval_json)
+        df = process_files(file_list, args.alignment_corpus, args.av_offset)
+        df2task(df, task_file, item_file)
     
     dis.compute_distances(args.feat_file, '/features/', task_file, dis_file,
                               distance, normalized=args.normalized, n_cpu=args.n_cpu)

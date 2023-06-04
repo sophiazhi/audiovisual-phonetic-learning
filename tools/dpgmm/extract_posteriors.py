@@ -42,7 +42,7 @@ def _compute_precisions_chol(cov):
     return precisions_chol
 
 
-def _log_normal_matrix(points, means, cov):
+def _log_normal_matrix(points, means, cov, flex_align):
     """
     This method computes the log of the density of probability of a normal
     law centered. Each line
@@ -57,6 +57,12 @@ def _log_normal_matrix(points, means, cov):
              law centered (n_points,n_components)
     """
     n_points,dim = points.shape
+    if flex_align == 'left':
+        cov = cov[:,:dim,:dim]
+        means = means[:,:dim]
+    elif flex_align == 'right':
+        cov = cov[:,-dim:,-dim:]
+        means = means[:,-dim:]
     n_components,_ = means.shape
     precisions_chol = _compute_precisions_chol(cov)
     log_det_chol = np.log(np.linalg.det(precisions_chol))    
@@ -112,7 +118,7 @@ def load_model(filename):
     return model
 
 
-def compute_log_posteriors(points, model):
+def compute_log_posteriors(points, model, flex_align):
     """
     Returns responsibilities for each
     point in each cluster
@@ -129,7 +135,8 @@ def compute_log_posteriors(points, model):
     """
     log_normal_matrix = _log_normal_matrix(points,
                                            model['means'],
-                                           model['cov'])
+                                           model['cov'],
+                                           flex_align)
     log_product = log_normal_matrix + model['log_weights'][:,np.newaxis].T
     log_prob_norm = scipy.misc.logsumexp(log_product,axis=1)
     log_resp = log_product - log_prob_norm[:,np.newaxis]       
@@ -156,7 +163,7 @@ def extract_posteriors(features_file, model_file, output_file):
         writer.write(post_data, 'features')
 
 
-def extract_posteriors_lowmem(features_file, model_file, output_file):
+def extract_posteriors_lowmem(features_file, model_file, output_file, flex_align):
     # just like extract_posteriors but writing item by item
     # if this is too slow, could do a version by blocks of items
     print('Loading model')
@@ -174,7 +181,7 @@ def extract_posteriors_lowmem(features_file, model_file, output_file):
                                                      data.labels(),
                                                      input_features)):
             print('Computing posteriors for item {} of {}'.format(i+1, nbItems))
-            post_features = [np.exp(compute_log_posteriors(feats, model))]
+            post_features = [np.exp(compute_log_posteriors(feats, model, flex_align))]
             post_data = h5f.Data([item], [label], post_features, check=True)
             print('Writing posteriors to disk')
             writer.write(post_data, 'features', append=True)
@@ -191,5 +198,7 @@ if __name__ == '__main__':
     parser.add_argument('output_file', help = "h5features file where" + \
                                               "extracted posteriorgrams" + \
                                               "will be stored")                 
+    parser.add_argument('--flex_align', default=None, 
+                        help="`left` or `right`, indicating which dimensions of the model to use")
     args = parser.parse_args()
-    extract_posteriors_lowmem(args.features_file, args.model_file, args.output_file)
+    extract_posteriors_lowmem(args.features_file, args.model_file, args.output_file, args.flex_align)

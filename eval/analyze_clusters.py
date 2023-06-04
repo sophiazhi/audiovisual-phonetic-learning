@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 import argparse
 import sklearn.metrics
+from scipy.stats import entropy
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Parse arguments for cluster analysis')
@@ -40,7 +41,7 @@ def _atime2phone(a_time, alignment_df):
     phone_label = phone_match['Label'].iloc[0]
     return phone_label
 
-def confusion_matrix(eval_list, eval_posteriors, alignment_corpus, png_name):
+def confusion_matrix(eval_list, eval_posteriors, alignment_corpus, res_id):
     # dictionary mapping phone key to np array of cluster occurrence counts
     counts_by_phone = {}
     for filename in eval_list:
@@ -92,8 +93,22 @@ def confusion_matrix(eval_list, eval_posteriors, alignment_corpus, png_name):
 
     ax.set_title("Cluster assignments")
     fig.tight_layout()
-    plt.savefig('{}.png'.format(png_name))
+    plt.savefig(f'{res_id}/{res_id}_cluster_assignments.png')
     plt.clf()
+
+
+    assignments = cluster_array.argmax(axis=1)
+    assignments = list(assignments)
+    cluster_counts_dict = {phone_labels[i]:assignments.count(i) for i in set(assignments)}
+    entropies = entropy(cluster_array, axis=1)
+    unweighted_avg_entropy = np.average(entropies)
+    weighted_avg_entropy = np.average(entropies, weights=np.array(cluster_counts).T.sum(axis=1))
+    with open(f"{res_id}/{res_id}_cluster_eval.json", 'w') as f:
+        json.dump({
+            'cluster_counts': cluster_counts_dict, 
+            'unweighted_average_entropy': unweighted_avg_entropy, 
+            'weighted_average_entropy': weighted_avg_entropy
+            }, f)
     
 def rand_score(eval_list, A_posteriors, B_posteriors):
     # dictionary mapping phone key to np array of cluster occurrence counts
@@ -120,7 +135,7 @@ if __name__ == '__main__':
     eval_posteriors = read_posteriors(args.posteriors_features)
     eval_list = read_eval_json(args.eval_json)
 
-    confusion_matrix(eval_list, eval_posteriors, args.alignment_corpus, f'{args.id}/{args.id}_cluster_assignments')
+    confusion_matrix(eval_list, eval_posteriors, args.alignment_corpus, args.id)
 
     if args.other_posteriors is not None:
         other_posteriors = read_posteriors(args.other_posteriors)

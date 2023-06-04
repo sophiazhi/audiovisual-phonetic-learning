@@ -18,6 +18,7 @@ import video_library # from video_library import video_transform_90x190 as video
 import numpy as np
 from pathlib import Path
 import pandas as pd
+import random
 
 
 def parse_args():
@@ -84,13 +85,24 @@ def phone2feat(phone_label, post_onset_time):
 
     # be1375fy_oracle_brokenstops30
     # onehot = torch.empty((len(phones)+3,)) # normal idxs, other bucket, P/B bucket, K/G/T/D bucket
+    ## below gives non positive definite covariance matrix
+    # onehot = torch.normal(mean=torch.zeros((len(phones)+3,)) + 4, std=torch.zeros((len(phones)+3,))+2)
+    # if (phone_label == 'P' or phone_label == 'B') and post_onset_time < 30:
+    #     onehot[-2] = 10
+    # elif phone_label in STOPS and post_onset_time < 30:
+    #     onehot[-1] = 10
+    # else:
+    #     onehot[idx] = 10
+    # return onehot
+
+    # be1375fy_oracle_brokenstopsmix
     onehot = torch.normal(mean=torch.zeros((len(phones)+3,)) + 4, std=torch.zeros((len(phones)+3,))+2)
     if (phone_label == 'P' or phone_label == 'B') and post_onset_time < 30:
-        onehot[-2] = 10
+        onehot[-2] = 10 + random.uniform(-1,1)
     elif phone_label in STOPS and post_onset_time < 30:
-        onehot[-1] = 10
+        onehot[-1] = 10 + random.uniform(-1,1)
     else:
-        onehot[idx] = 10
+        onehot[idx] = 10 + random.uniform(-1,1)
     return onehot
 
     # # be1375fy_oracle_onehot

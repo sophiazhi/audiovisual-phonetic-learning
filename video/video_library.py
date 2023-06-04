@@ -173,13 +173,6 @@ frame_transform_offset_200 = lambda a_idx, video_features, audio_features, video
 
 
 def frame_transform_offset_frontpad(a_idx, video_features, audio_features, video_name_stem, video_fps, offset, frontpad=500):
-    # if mode == 'a':
-    #     return torch.cat(
-    #         [audio_features[a_idx],
-    #         torch.Tensor([int(video_name_stem)]), 
-    #         torch.Tensor([a_idx])],
-    #         dim=-1
-    #     )
     v_idx = a2v_idx_offset(int(a_idx+frontpad/10), video_fps, offset)
     if v_idx < 0:
         return None
@@ -199,6 +192,48 @@ def frame_transform_offset_frontpad(a_idx, video_features, audio_features, video
     ) # torch.Size([178])
     return frame_data
 
+frame_transform_offset_frontpad_110 = lambda a_idx, video_features, audio_features, video_name_stem, video_fps: frame_transform_offset_frontpad(a_idx, video_features, audio_features, video_name_stem, video_fps, 110)
 frame_transform_offset_frontpad_120 = lambda a_idx, video_features, audio_features, video_name_stem, video_fps: frame_transform_offset_frontpad(a_idx, video_features, audio_features, video_name_stem, video_fps, 120)
 frame_transform_offset_frontpad_130 = lambda a_idx, video_features, audio_features, video_name_stem, video_fps: frame_transform_offset_frontpad(a_idx, video_features, audio_features, video_name_stem, video_fps, 130)
 frame_transform_offset_frontpad_140 = lambda a_idx, video_features, audio_features, video_name_stem, video_fps: frame_transform_offset_frontpad(a_idx, video_features, audio_features, video_name_stem, video_fps, 140)
+
+def frame_transform_offset_frontpad_nocontext(a_idx, video_features, audio_features, video_name_stem, video_fps, offset, frontpad=500):
+    v_idx = a2v_idx_offset(int(a_idx+frontpad/10), video_fps, offset)
+    if v_idx < 0:
+        return None
+    video_frame = video_features[v_idx]
+    # append audio slice + video slice to data
+    frame_data = torch.cat(
+        [audio_features[int(a_idx+frontpad/10)], 
+            video_frame, 
+            torch.Tensor([int(video_name_stem)]), 
+            torch.Tensor([a_idx])], 
+            dim=-1,
+    )
+    return frame_data
+
+frame_transform_offset_frontpad_nocontext_120 = lambda a_idx, video_features, audio_features, video_name_stem, video_fps: frame_transform_offset_frontpad_nocontext(a_idx, video_features, audio_features, video_name_stem, video_fps, 120)
+
+
+def frame_transform_offset_frontpad_dd(a_idx, video_features, audio_features, video_name_stem, video_fps, offset, frontpad=500):
+    v_idx = a2v_idx_offset(int(a_idx+frontpad/10), video_fps, offset)
+    if v_idx < 0:
+        return None
+    video_frame = video_features[v_idx]
+    # add info from surrounding video frames to video features
+    prev_video_frame = video_features[v_idx] if v_idx == 0 else video_features[v_idx-1]
+    next_video_frame = video_features[v_idx] if v_idx == (video_features.shape[0]-1) else video_features[v_idx+1]
+    # append audio slice + video slice to data
+    frame_data = torch.cat(
+        [audio_features[int(a_idx+frontpad/10)], 
+            video_frame, 
+            video_frame-prev_video_frame, 
+            next_video_frame-video_frame, 
+            (next_video_frame-video_frame) - (video_frame-prev_video_frame),
+            torch.Tensor([int(video_name_stem)]), 
+            torch.Tensor([a_idx])], 
+            dim=-1,
+    ) # torch.Size([178])
+    return frame_data
+
+frame_transform_offset_frontpad_dd_120 = lambda a_idx, video_features, audio_features, video_name_stem, video_fps: frame_transform_offset_frontpad_dd(a_idx, video_features, audio_features, video_name_stem, video_fps, 120)
