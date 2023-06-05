@@ -21,11 +21,7 @@ def parse_args():
     
     parser.add_argument('eval_json', help='Path to json list of eval videos')
     parser.add_argument('feat_file', help='Path to eval set features file')
-    # parser.add_argument('task_file', default='task.abx', help='File to write task to')
     parser.add_argument('res_id', help='identifier for task results')
-    # parser.add_argument('res_folder', default='root/eval/abx', help=('Result folder (must contain'
-    #                                         'distances, scores and results'
-    #                                         'subfolders)'))
     
     parser.add_argument('--av_offset', default=0, type=int, help='video-audio offset used in feature extraction')
     parser.add_argument('--alignment_corpus', default='/om2/user/szhi/corpora/childes_synthetic_audio_alignment', help='Path to corpus of audio-text alignment .csvs')
@@ -71,7 +67,6 @@ def process_files(file_list, alignment_corpus, av_offset):
         # audio_idx * 10 + 25/2 - offset >= 0 --> audio_idx >= ceil((offset-12.5)/10)
         # first audio idx at ceil((offset-12.5)/10) --> first audio window centered at 10*ceil((offset-12.5)/10) + 25/2
         df = df.drop(df[df['End']*1000 <= 10*math.ceil((av_offset-12.5)/10) + 25/2].index) # end of phone must be greater than center of the first audio window
-        # df = df.drop(df[(df['Begin'] + df['End'])/2 < 14*0.010+0.025/2].index) # worked for offset=150 but probably not the most comprehensive
         # start of phone must be less than center of last audio window
         last_aidx = (df['End'].max() - 0.025)//0.01
         df = df.drop(df[df['Begin'] >= 0.010*last_aidx + 0.0125].index) 

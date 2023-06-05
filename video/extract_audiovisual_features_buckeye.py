@@ -53,10 +53,7 @@ def process_videos(
     output_file,
     mode='av',
     ):
-    if split == 'train':
-        train = True
-    elif split == 'test' or split == 'eval':
-        train = False
+    train = (split == 'train')
     
     audio_sample_rate = read_video(os.path.splitext(os.path.join(video_corpus, train_list[0]))[0] + ".mp4", pts_unit='sec')[2]['audio_fps']
 
